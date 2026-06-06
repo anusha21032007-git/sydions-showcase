@@ -38,6 +38,8 @@ function App() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [viewTargetProject, setViewTargetProject] = useState(null)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [activePopoverProjectId, setActivePopoverProjectId] = useState(null)
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 })
 
   // Developer Dashboard states
   const [isDeveloperLoggedIn, setIsDeveloperLoggedIn] = useState(() => {
@@ -357,10 +359,11 @@ function App() {
     }
   }, [isSignInModalOpen])
 
-  // Close action menu dropdown when clicking anywhere outside
+  // Close action menu dropdown and project popover when clicking anywhere outside
   useEffect(() => {
     const handleOutsideClick = () => {
       setActiveActionMenuId(null)
+      setActivePopoverProjectId(null)
     }
     document.addEventListener('click', handleOutsideClick)
     return () => {
@@ -368,10 +371,33 @@ function App() {
     }
   }, [])
 
+  // Close project popover on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setActivePopoverProjectId(null)
+    }
+    window.addEventListener('scroll', handleScroll, true)
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [])
+
   // Navigation items
   const navItems = ['Home', 'About', 'Contact Us']
 
-
+  const handleEyeClick = (e, project) => {
+    e.stopPropagation();
+    if (activePopoverProjectId === project.id) {
+      setActivePopoverProjectId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setActivePopoverProjectId(project.id);
+      setPopoverPosition({
+        top: rect.top - 8,
+        left: rect.left + rect.width / 2
+      });
+    }
+  };
 
   if (isAdminLoggedIn) {
     return (
@@ -584,7 +610,22 @@ function App() {
                       ) : (
                         projectsData.filter(p => p.status === 'pending').map(p => (
                           <tr key={p.id}>
-                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.title}</td>
+                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              <div className="project-title-cell-content">
+                                <span>{p.title}</span>
+                                <button
+                                  type="button"
+                                  className={`project-eye-btn ${activePopoverProjectId === p.id ? 'active' : ''}`}
+                                  onClick={(e) => handleEyeClick(e, p)}
+                                  title="View Project Details"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
                             <td>{p.developer}</td>
                             <td>{p.dateTime}</td>
                             <td>
@@ -646,7 +687,22 @@ function App() {
                       ) : (
                         projectsData.filter(p => p.status === 'approved').map(p => (
                           <tr key={p.id}>
-                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.title}</td>
+                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              <div className="project-title-cell-content">
+                                <span>{p.title}</span>
+                                <button
+                                  type="button"
+                                  className={`project-eye-btn ${activePopoverProjectId === p.id ? 'active' : ''}`}
+                                  onClick={(e) => handleEyeClick(e, p)}
+                                  title="View Project Details"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
                             <td>{p.developer}</td>
                             <td>{p.dateTime}</td>
                             <td>
@@ -706,7 +762,22 @@ function App() {
                       ) : (
                         projectsData.filter(p => p.status === 'rejected').map(p => (
                           <tr key={p.id}>
-                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.title}</td>
+                            <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              <div className="project-title-cell-content">
+                                <span>{p.title}</span>
+                                <button
+                                  type="button"
+                                  className={`project-eye-btn ${activePopoverProjectId === p.id ? 'active' : ''}`}
+                                  onClick={(e) => handleEyeClick(e, p)}
+                                  title="View Project Details"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
                             <td>{p.developer}</td>
                             <td>{p.dateTime}</td>
                             <td className="text-red-muted">{p.rejectionReason}</td>
@@ -1315,6 +1386,79 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Project Details Popover */}
+        {activePopoverProjectId && (() => {
+          const p = projectsData.find(proj => proj.id === activePopoverProjectId);
+          if (!p) return null;
+
+          const sanitizeUrl = (url) => {
+            if (!url) return '';
+            const trimmed = url.trim();
+            if (trimmed.toLowerCase().startsWith('javascript:')) {
+              return '#';
+            }
+            if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+              return `https://${trimmed}`;
+            }
+            return trimmed;
+          };
+
+          return (
+            <div
+              className="project-minimal-popover"
+              style={{
+                position: 'fixed',
+                top: popoverPosition.top,
+                left: popoverPosition.left,
+                transform: 'translate(-50%, -100%)',
+                zIndex: 99999
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {p.thumbnail && (
+                <div className="popover-thumbnail">
+                  <img src={p.thumbnail} alt={p.title} />
+                </div>
+              )}
+              <div className="popover-header">
+                <span className="popover-category" style={{
+                  background: p.category === 'AI' ? 'rgba(16, 185, 129, 0.1)' : p.category === 'Cybersecurity' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(0, 242, 254, 0.1)',
+                  color: p.category === 'AI' ? 'var(--accent-green-bright)' : p.category === 'Cybersecurity' ? 'var(--accent-blue)' : 'var(--accent-cyan)',
+                  border: p.category === 'AI' ? '1px solid rgba(16, 185, 129, 0.2)' : p.category === 'Cybersecurity' ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid rgba(0, 242, 254, 0.2)',
+                }}>{p.category}</span>
+                <span className="popover-date">{p.dateTime}</span>
+              </div>
+              <h4 className="popover-title">{p.title}</h4>
+              <p className="popover-desc">{p.description}</p>
+              {p.tags && p.tags.length > 0 && (
+                <div className="popover-tags">
+                  {p.tags.map((tag, idx) => (
+                    <span key={idx} className="popover-tag">{tag}</span>
+                  ))}
+                </div>
+              )}
+              <div className="popover-footer">
+                <span className="popover-author">By {p.developer}</span>
+                {p.demoLink && (
+                  <a
+                    href={sanitizeUrl(p.demoLink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="popover-demo-link"
+                  >
+                    Demo Link
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Fixed bottom-right toast notification */}
         {showToast && (
