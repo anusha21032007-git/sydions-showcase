@@ -3,6 +3,18 @@ import logoImg from './assets/hero.jpeg'
 import './App.css'
 import { supabase } from './supabaseClient'
 
+const sanitizeUrl = (url) => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (trimmed.toLowerCase().startsWith('javascript:')) {
+    return '#';
+  }
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+};
+
 function App() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -37,6 +49,8 @@ function App() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [viewTargetProject, setViewTargetProject] = useState(null)
+  const [isVisitorViewModalOpen, setIsVisitorViewModalOpen] = useState(false)
+  const [visitorViewTargetProject, setVisitorViewTargetProject] = useState(null)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [activePopoverProjectId, setActivePopoverProjectId] = useState(null)
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 })
@@ -344,20 +358,21 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Close Sign In modal on Escape key press
+  // Close Sign In and Visitor details modal on Escape key press
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         closeModal()
+        setIsVisitorViewModalOpen(false)
       }
     }
-    if (isSignInModalOpen) {
+    if (isSignInModalOpen || isVisitorViewModalOpen) {
       window.addEventListener('keydown', handleKeyDown)
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isSignInModalOpen])
+  }, [isSignInModalOpen, isVisitorViewModalOpen])
 
   // Close action menu dropdown and project popover when clicking anywhere outside
   useEffect(() => {
@@ -1391,18 +1406,6 @@ function App() {
         {activePopoverProjectId && (() => {
           const p = projectsData.find(proj => proj.id === activePopoverProjectId);
           if (!p) return null;
-
-          const sanitizeUrl = (url) => {
-            if (!url) return '';
-            const trimmed = url.trim();
-            if (trimmed.toLowerCase().startsWith('javascript:')) {
-              return '#';
-            }
-            if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-              return `https://${trimmed}`;
-            }
-            return trimmed;
-          };
 
           return (
             <div
@@ -2590,7 +2593,15 @@ function App() {
           </div>
           <div className="project-grid">
             {projectsData.filter(p => p.status === 'approved').map((project) => (
-              <div key={project.id} className={`project-card card-${project.color}`}>
+              <div
+                key={project.id}
+                className={`project-card card-${project.color}`}
+                onClick={() => {
+                  setVisitorViewTargetProject(project)
+                  setIsVisitorViewModalOpen(true)
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="project-card-glow" />
                 <div className="project-category-wrapper">
                   <span className="project-category-tag">{project.category}</span>
@@ -2696,6 +2707,75 @@ function App() {
       </footer>
 
 
+
+      {/* Visitor Project Details Modal Popup */}
+      {isVisitorViewModalOpen && visitorViewTargetProject && (
+        <div className="signin-modal-overlay" onClick={() => setIsVisitorViewModalOpen(false)}>
+          <div className="signin-modal-card modal-scrollable" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsVisitorViewModalOpen(false)} aria-label="Close modal">✕</button>
+            <div className="modal-header">
+              <span className="project-category-tag" style={{
+                background: 'rgba(0, 242, 254, 0.1)',
+                color: 'var(--accent-cyan)',
+                border: '1px solid rgba(0, 242, 254, 0.2)',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                display: 'inline-block',
+                marginBottom: '10px'
+              }}>{visitorViewTargetProject.category}</span>
+              <h2 className="modal-title">{visitorViewTargetProject.title}</h2>
+              <p className="modal-subtitle">Built by {visitorViewTargetProject.developer} on {visitorViewTargetProject.dateTime}</p>
+            </div>
+            <div className="project-view-details" style={{ display: 'flex', flexDirection: 'column', gap: '20px', color: 'var(--text-secondary)' }}>
+              {visitorViewTargetProject.thumbnail && (
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <img
+                    src={visitorViewTargetProject.thumbnail}
+                    alt="Project Thumbnail"
+                    style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                  />
+                </div>
+              )}
+              <div>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Description</h4>
+                <p style={{ lineHeight: '1.6', fontSize: '14.5px' }}>{visitorViewTargetProject.description}</p>
+              </div>
+              {visitorViewTargetProject.demoLink && (
+                <div>
+                  <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Demo Link</h4>
+                  <p style={{ fontSize: '14.5px' }}>
+                    <a href={sanitizeUrl(visitorViewTargetProject.demoLink)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      {visitorViewTargetProject.demoLink}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  </p>
+                </div>
+              )}
+              {visitorViewTargetProject.tags && visitorViewTargetProject.tags.length > 0 && (
+                <div>
+                  <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Technologies Used</h4>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {visitorViewTargetProject.tags.map(tag => (
+                      <span key={tag} className="project-tag-item">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Contact Developer</h4>
+                <p style={{ fontSize: '14px' }}>Email: <a href={`mailto:${visitorViewTargetProject.email}`} style={{ color: 'var(--accent-cyan)' }}>{visitorViewTargetProject.email}</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sign In/Up Modal Dialog Overlay */}
       {isSignInModalOpen && (
