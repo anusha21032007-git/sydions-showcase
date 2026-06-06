@@ -2287,6 +2287,30 @@ body:has(.admin-dashboard-container) {
   position: relative;
 }
 
+.three-dots-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  outline: none;
+}
+
+.three-dots-btn:hover,
+.three-dots-btn.active {
+  background: rgba(0, 242, 254, 0.08);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+
 /* Vertical Action Dropdown Menu */
 .vertical-action-buttons {
   position: absolute;

@@ -72,6 +72,7 @@ function App() {
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false)
   const [resetPasswordTarget, setResetPasswordTarget] = useState(null)
   const [resetPasswordData, setResetPasswordData] = useState({ password: '', confirmPassword: '' })
+  const [activeActionMenuId, setActiveActionMenuId] = useState(null)
 
   const [projectsData, setProjectsData] = useState([])
   const [developersData, setDevelopersData] = useState([])
@@ -355,6 +356,17 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isSignInModalOpen])
+
+  // Close action menu dropdown when clicking anywhere outside
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setActiveActionMenuId(null)
+    }
+    document.addEventListener('click', handleOutsideClick)
+    return () => {
+      document.removeEventListener('click', handleOutsideClick)
+    }
+  }, [])
 
   // Navigation items
   const navItems = ['Home', 'About', 'Contact Us']
@@ -751,50 +763,73 @@ function App() {
                         <td>
                           <div className="action-buttons-cell">
                             <button
-                              className="action-btn view-btn"
-                              onClick={() => {
-                                setEditDevTarget(d)
-                                setEditDevData({ username: d.name, email: d.email })
-                                setIsEditDevModalOpen(true)
+                              className={`three-dots-btn ${activeActionMenuId === d.id ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveActionMenuId(activeActionMenuId === d.id ? null : d.id);
                               }}
+                              title="Actions"
                             >
-                              Edit
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                              </svg>
                             </button>
-                            <button
-                              className="action-btn view-btn"
-                              onClick={() => {
-                                setResetPasswordTarget(d)
-                                setResetPasswordData({ password: '', confirmPassword: '' })
-                                setIsResetPasswordModalOpen(true)
-                              }}
-                            >
-                              Reset Password
-                            </button>
-                            <button
-                              className={`action-btn ${d.status === 'Active' ? 'remove-btn' : 'approve-btn'}`}
-                              onClick={async () => {
-                                const newStatus = d.status === 'Active' ? 'Disabled' : 'Active';
-                                const newDbStatus = newStatus === 'Active' ? 'active' : 'disabled';
-                                const { error } = await supabase
-                                  .from('profiles')
-                                  .update({ status: newDbStatus })
-                                  .eq('id', d.id);
-                                if (error) {
-                                  triggerToast("Error", error.message);
-                                } else {
-                                  triggerToast(newStatus === 'Active' ? 'Enabled' : 'Disabled', `Developer '${d.name}' account is ${newStatus.toLowerCase()}.`);
-                                  fetchAllData();
-                                }
-                              }}
-                            >
-                              {d.status === 'Active' ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              className="action-btn reject-btn"
-                              onClick={() => setDeleteConfirmTarget(d)}
-                            >
-                              Delete
-                            </button>
+
+                            {activeActionMenuId === d.id && (
+                              <div className="vertical-action-buttons" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className="action-btn view-btn"
+                                  onClick={() => {
+                                    setEditDevTarget(d)
+                                    setEditDevData({ username: d.name, email: d.email })
+                                    setIsEditDevModalOpen(true)
+                                    setActiveActionMenuId(null)
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="action-btn view-btn"
+                                  onClick={() => {
+                                    setResetPasswordTarget(d)
+                                    setResetPasswordData({ password: '', confirmPassword: '' })
+                                    setIsResetPasswordModalOpen(true)
+                                    setActiveActionMenuId(null)
+                                  }}
+                                >
+                                  Reset Password
+                                </button>
+                                <button
+                                  className={`action-btn ${d.status === 'Active' ? 'remove-btn' : 'approve-btn'}`}
+                                  onClick={async () => {
+                                    const newStatus = d.status === 'Active' ? 'Disabled' : 'Active';
+                                    const newDbStatus = newStatus === 'Active' ? 'active' : 'disabled';
+                                    const { error } = await supabase
+                                      .from('profiles')
+                                      .update({ status: newDbStatus })
+                                      .eq('id', d.id);
+                                    if (error) {
+                                      triggerToast("Error", error.message);
+                                    } else {
+                                      triggerToast(newStatus === 'Active' ? 'Enabled' : 'Disabled', `Developer '${d.name}' account is ${newStatus.toLowerCase()}.`);
+                                      fetchAllData();
+                                    }
+                                    setActiveActionMenuId(null);
+                                  }}
+                                >
+                                  {d.status === 'Active' ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  className="action-btn reject-btn"
+                                  onClick={() => {
+                                    setDeleteConfirmTarget(d)
+                                    setActiveActionMenuId(null)
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
