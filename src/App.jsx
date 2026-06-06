@@ -22,7 +22,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(
     window.location.pathname === '/projects' ? 'projects' : 'home'
   )
-  const [formData, setFormData] = useState({ fullName: '', email: '', phone: '' })
+  const [formData, setFormData] = useState({ fullName: '', email: '', phone: '', reason: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastTitle, setToastTitle] = useState('')
@@ -43,6 +43,9 @@ function App() {
     return localStorage.getItem('isAdminLoggedIn') === 'true';
   })
   const [adminActiveTab, setAdminActiveTab] = useState('home')
+  const [contactRequests, setContactRequests] = useState([])
+  const [selectedReason, setSelectedReason] = useState(null)
+  const [deleteContactTarget, setDeleteContactTarget] = useState(null)
   const [projectsSubTab, setProjectsSubTab] = useState('active')
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false)
   const [rejectionTargetProjectId, setRejectionTargetProjectId] = useState(null)
@@ -124,6 +127,17 @@ function App() {
       const notifsRaw = localStorage.getItem('sydions_notifications');
       const loadedNotifications = notifsRaw ? JSON.parse(notifsRaw) : [];
       setNotifications(loadedNotifications);
+
+      // Load contact requests from contact_messages
+      const { data: contacts, error: contactsErr } = await supabase
+        .from('contact_messages')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (contactsErr) {
+        console.error("Error fetching contact requests:", contactsErr.message);
+      } else if (contacts) {
+        setContactRequests(contacts);
+      }
     } catch (err) {
       console.error("Error loading Supabase data:", err);
     }
@@ -191,28 +205,44 @@ function App() {
   }
 
   const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const contactsRaw = localStorage.getItem('sydions_contacts');
-      const currentContacts = contactsRaw ? JSON.parse(contactsRaw) : [];
-      currentContacts.unshift({
-        id: Date.now(),
-        full_name: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        dateTime: new Date().toISOString()
-      });
-      localStorage.setItem('sydions_contacts', JSON.stringify(currentContacts));
-      setFormData({ fullName: '', email: '', phone: '' });
-      triggerToast("Request Submitted!", "Request submitted successfully. We'll contact you soon.");
-    } catch (err) {
-      triggerToast("Error", "An unexpected error occurred.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  e.preventDefault();
+  setIsSubmitting(true);
 
+  try {
+    const { error } = await supabase
+      .from('contact_messages')
+      .insert([
+        {
+          name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          reason: formData.reason
+        }
+      ]);
+
+    if (error) {
+      triggerToast("Error", error.message);
+      return;
+    }
+
+    setFormData({
+      fullName: '',
+      email: '',
+      phone: '',
+      reason: ''
+    });
+
+    triggerToast(
+      "Request Submitted!",
+      "We'll contact you soon."
+    );
+
+  } catch (err) {
+    triggerToast("Error", "Something went wrong.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   const closeModal = () => {
     setIsSignInModalOpen(false)
     setIsSignUp(false)
@@ -364,15 +394,17 @@ function App() {
       if (e.key === 'Escape') {
         closeModal()
         setIsVisitorViewModalOpen(false)
+        setSelectedReason(null)
+        setDeleteContactTarget(null)
       }
     }
-    if (isSignInModalOpen || isVisitorViewModalOpen) {
+    if (isSignInModalOpen || isVisitorViewModalOpen || selectedReason !== null || deleteContactTarget !== null) {
       window.addEventListener('keydown', handleKeyDown)
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isSignInModalOpen, isVisitorViewModalOpen])
+  }, [isSignInModalOpen, isVisitorViewModalOpen, selectedReason, deleteContactTarget])
 
   // Close action menu dropdown and project popover when clicking anywhere outside
   useEffect(() => {
@@ -466,6 +498,16 @@ function App() {
               Developers
             </button>
             <button
+              className={`sidebar-nav-item ${adminActiveTab === 'contact-requests' ? 'active' : ''}`}
+              onClick={() => setAdminActiveTab('contact-requests')}
+            >
+              <svg className="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              Contact Requests
+            </button>
+            <button
               className="sidebar-nav-item logout"
               onClick={() => {
                 localStorage.removeItem('isAdminLoggedIn')
@@ -491,6 +533,7 @@ function App() {
               {adminActiveTab === 'home' && "Dashboard Overview"}
               {adminActiveTab === 'projects' && "Project Management"}
               {adminActiveTab === 'developers' && "Developers Directory"}
+              {adminActiveTab === 'contact-requests' && "Contact Requests"}
             </h1>
             <div className="admin-topbar-actions">
               {/* Notification Bell */}
@@ -925,7 +968,156 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* Contact Requests Tab */}
+          {adminActiveTab === 'contact-requests' && (
+            <div className="admin-tab-content fade-in">
+              <div className="developers-tab-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+                <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '20px' }}>Contact Requests</h3>
+              </div>
+
+              <div className="table-responsive glass-panel">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Reason</th>
+                      <th>Created At</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contactRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="text-center no-data" style={{ padding: '20px', color: 'var(--text-secondary)' }}>
+                          No contact requests found.
+                        </td>
+                      </tr>
+                    ) : (
+                      contactRequests.map((req) => (
+                        <tr key={req.id}>
+                          <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{req.name || req.full_name || 'N/A'}</td>
+                          <td>
+                            {req.email ? (
+                              <a href={`mailto:${req.email}`} style={{ color: 'var(--accent-cyan)' }}>
+                                {req.email}
+                              </a>
+                            ) : (
+                              'N/A'
+                            )}
+                          </td>
+                          <td>{req.phone || 'N/A'}</td>
+                          <td>
+                            {req.reason ? (
+                              <button
+                                type="button"
+                                className="project-eye-btn"
+                                onClick={() => setSelectedReason(req.reason)}
+                                title="View Reason"
+                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                              </button>
+                            ) : (
+                              'N/A'
+                            )}
+                          </td>
+                          <td>
+                            {req.created_at ? new Date(req.created_at).toLocaleString() : 'N/A'}
+                          </td>
+                          <td>
+                            <div className="action-buttons-cell">
+                              <button
+                                className="action-btn reject-btn"
+                                onClick={() => setDeleteContactTarget(req)}
+                                title="Delete Contact Request"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </main>
+
+        {/* Contact Reason Modal Popup */}
+        {selectedReason !== null && (
+          <div className="signin-modal-overlay" onClick={() => setSelectedReason(null)}>
+            <div className="signin-modal-card modal-small" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setSelectedReason(null)} aria-label="Close modal">✕</button>
+              <div className="modal-header">
+                <h2 className="modal-title font-semibold">Contact Reason</h2>
+              </div>
+              <div className="contact-form" style={{ marginTop: '20px' }}>
+                <div className="form-group">
+                  <div className="glass-panel" style={{ padding: '16px', borderRadius: '8px', lineHeight: '1.6', color: 'var(--text-primary)', border: '1px solid var(--border-color)', background: 'var(--bg-card-hover)' }}>
+                    {selectedReason || "No reason provided."}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="form-submit-btn large-gradient-btn"
+                  onClick={() => setSelectedReason(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Contact Request Confirmation Modal Popup */}
+        {deleteContactTarget && (
+          <div className="signin-modal-overlay" onClick={() => setDeleteContactTarget(null)}>
+            <div className="signin-modal-card modal-small" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setDeleteContactTarget(null)} aria-label="Close modal">✕</button>
+              <div className="modal-header">
+                <h2 className="modal-title font-semibold text-red">Delete Contact Request</h2>
+                <p className="modal-subtitle">Are you sure you want to delete the contact request from "{deleteContactTarget.name || deleteContactTarget.full_name || 'N/A'}"? This action cannot be undone.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="form-submit-btn large-gradient-btn btn-reject"
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from('contact_messages')
+                      .delete()
+                      .eq('id', deleteContactTarget.id);
+                    if (error) {
+                      triggerToast("Error", error.message);
+                    } else {
+                      triggerToast("Deleted", "Contact request has been deleted.");
+                      fetchAllData();
+                    }
+                    setDeleteContactTarget(null);
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="form-submit-btn large-gradient-btn"
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                  onClick={() => setDeleteContactTarget(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Delete Developer Confirmation Modal Popup */}
         {deleteConfirmTarget && (
@@ -2562,6 +2754,19 @@ function App() {
                         value={formData.phone}
                         onChange={handleInputChange}
                         placeholder="Enter contact number"
+                        className="form-input"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="reason" className="form-label">Reason</label>
+                      <input
+                        type="text"
+                        id="reason"
+                        name="reason"
+                        required
+                        value={formData.reason}
+                        onChange={handleInputChange}
+                        placeholder="Enter reason for contacting"
                         className="form-input"
                       />
                     </div>
