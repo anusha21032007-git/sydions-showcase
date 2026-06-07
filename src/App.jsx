@@ -34,6 +34,7 @@ function App() {
   const [signUpData, setSignUpData] = useState({ fullName: '', username: '', email: '', password: '', confirmPassword: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null)
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState(null)
   const [adminsData, setAdminsData] = useState([
     { username: 'admin', email: 'admin@sydions.org', password: 'password123' }
   ])
@@ -396,15 +397,16 @@ function App() {
         setIsVisitorViewModalOpen(false)
         setSelectedReason(null)
         setDeleteContactTarget(null)
+        setDeleteProjectTarget(null)
       }
     }
-    if (isSignInModalOpen || isVisitorViewModalOpen || selectedReason !== null || deleteContactTarget !== null) {
+    if (isSignInModalOpen || isVisitorViewModalOpen || selectedReason !== null || deleteContactTarget !== null || deleteProjectTarget !== null) {
       window.addEventListener('keydown', handleKeyDown)
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isSignInModalOpen, isVisitorViewModalOpen, selectedReason, deleteContactTarget])
+  }, [isSignInModalOpen, isVisitorViewModalOpen, selectedReason, deleteContactTarget, deleteProjectTarget])
 
   // Close action menu dropdown and project popover when clicking anywhere outside
   useEffect(() => {
@@ -1838,12 +1840,13 @@ function App() {
                   <th>Project Title</th>
                   <th>Submission Date</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pendingProjects.length === 0 ? (
                   <tr>
-                    <td colSpan="3" className="text-center no-data">No pending projects.</td>
+                    <td colSpan="4" className="text-center no-data">No pending projects.</td>
                   </tr>
                 ) : (
                   pendingProjects.map(p => (
@@ -1881,6 +1884,16 @@ function App() {
                       <td>{p.dateTime}</td>
                       <td>
                         <span className="status-badge pending">Pending</span>
+                      </td>
+                      <td>
+                        <div className="action-buttons-cell">
+                          <button
+                            className="action-btn reject-btn"
+                            onClick={() => setDeleteProjectTarget(p)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -2294,6 +2307,60 @@ function App() {
                   onClick={() => setViewReasonProject(null)}
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Project Confirmation Modal */}
+        {deleteProjectTarget && (
+          <div className="signin-modal-overlay" onClick={() => setDeleteProjectTarget(null)}>
+            <div className="signin-modal-card modal-small" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setDeleteProjectTarget(null)} aria-label="Close modal">✕</button>
+              <div className="modal-header">
+                <h2 className="modal-title font-semibold text-red">Delete Project</h2>
+                <p className="modal-subtitle">Are you sure you want to delete this project?</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="form-submit-btn large-gradient-btn btn-reject"
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase
+                        .from('projects')
+                        .delete()
+                        .eq('id', deleteProjectTarget.id);
+
+                      if (error) {
+                        triggerToast("Error", error.message);
+                      } else {
+                        // Remove from local storage array as well
+                        const projsRaw = localStorage.getItem('sydions_projects');
+                        const currentProjs = projsRaw ? JSON.parse(projsRaw) : [];
+                        const updatedProjs = currentProjs.filter(proj => proj.id !== deleteProjectTarget.id);
+                        localStorage.setItem('sydions_projects', JSON.stringify(updatedProjs));
+
+                        triggerToast("Deleted", "Project has been permanently deleted.");
+                        fetchAllData();
+                      }
+                    } catch (err) {
+                      triggerToast("Error", "An unexpected error occurred.");
+                    } finally {
+                      setDeleteProjectTarget(null);
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="form-submit-btn large-gradient-btn"
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                  onClick={() => setDeleteProjectTarget(null)}
+                >
+                  Cancel
                 </button>
               </div>
             </div>
